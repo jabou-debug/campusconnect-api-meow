@@ -17,6 +17,12 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            
+            // Add the missing CampusConnect columns here:
+            $table->string('student_id', 20)->nullable();
+            $table->enum('role', ['student', 'admin', 'faculty'])->default('student');
+            $table->string('profile_photo')->nullable();
+            
             $table->rememberToken();
             $table->timestamps();
         });
