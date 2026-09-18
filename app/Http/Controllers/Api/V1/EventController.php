@@ -15,105 +15,115 @@ class EventController extends Controller
 
     /**
      * GET /api/v1/events
-     * Return all events, optionally filtered by category or status.
+     * Return all events with computed fields; optional filters.
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Event::with("organizer:id,name,role");
+        $query = Event::with('organizer:id,name,role');
 
-        if ($request->has("category")) {
-            $query->where("category", $request->query("category"));
+        if ($request->has('category')) {
+            $query->byCategory($request->query('category'));
         }
-        if ($request->has("status")) {
-            $query->where("status", $request->query("status"));
+        if ($request->has('status')) {
+            $query->where('status', $request->query('status'));
+        }
+        if ($request->boolean('free')) {
+            $query->free();
         }
 
-        $events = $query->orderBy("date")->get();
+        $events = $query->orderBy('date')->get();
 
-        return $this->successResponse($events, "Events retrieved.");
+        // Append computed accessors to every event
+        $events->each(fn($e) => $e->append(['rsvp_count', 'seats_available', 'is_full']));
+
+        return $this->successResponse($events, 'Events retrieved.');
     }
 
     /**
-     * POST /api/v1/events
-     * Create a new event (requires auth).
+     * POST /api/v1/events  [faculty/admin only]
+     * Create a new event with full validation.
      */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            "title"                 => "required|string|max:255",
-            "description"           => "required|string",
-            "location"              => "required|string|max:255",
-            "date"                  => "required|date",
-            "time_start"            => "required|date_format:H:i:s",
-            "time_end"              => "required|date_format:H:i:s|after:time_start",
-            "category"              => "required|string|max:100",
-            "status"                => "nullable|in:upcoming,ongoing,past,cancelled",
-            "capacity"              => "nullable|integer|min:1",
-            "is_free"               => "nullable|boolean",
-            "contact_email"         => "nullable|email",
-            "registration_deadline" => "nullable|date|before:date",
+            'title'                 => ['required', 'string', 'max:255'],
+            'description'           => ['required', 'string'],
+            'location'              => ['required', 'string', 'max:255'],
+            'date'                  => ['required', 'date', 'after_or_equal:today'],
+            'time_start'            => ['required', 'date_format:H:i:s'],
+            'time_end'              => ['required', 'date_format:H:i:s', 'after:time_start'],
+            'category'              => ['required', 'string', 'max:100'],
+            'capacity'              => ['required', 'integer', 'min:1'],
+            'is_free'               => ['nullable', 'boolean'],
+            'contact_email'         => ['nullable', 'email'],
+            'registration_deadline' => ['nullable', 'date', 'before_or_equal:date'],
         ]);
 
-        $event = Event::create([
-            "user_id" => $request->user()->id,
-            ...$validated,
-        ]);
+        $event = Event::create(array_merge($validated, [
+            'user_id' => $request->user()->id,
+            'status'  => 'upcoming',
+            'is_free' => $validated['is_free'] ?? true,
+        ]));
 
-        $event->load("organizer:id,name,role");
+        $event->load('organizer:id,name,role');
+        $event->append(['rsvp_count', 'seats_available', 'is_full']);
 
-        return $this->successResponse($event, "Event created.", 201);
+        return $this->createdResponse($event, 'Event created.');
     }
 
     /**
      * GET /api/v1/events/{id}
-     * Return a single event by ID.
+     * Return a single event with computed fields.
      */
     public function show(string $id): JsonResponse
     {
-        $event = Event::with("organizer:id,name,role")->find($id);
-        if (!$event) return $this->notFoundResponse("Event");
+        $event = Event::with('organizer:id,name,role')->find($id);
+        if (!$event) return $this->notFoundResponse('Event');
 
-        return $this->successResponse($event, "Event retrieved.");
+        $event->append(['rsvp_count', 'seats_available', 'is_full']);
+
+        return $this->successResponse($event, 'Event retrieved.');
     }
 
     /**
-     * PUT/PATCH /api/v1/events/{id}
-     * Update an existing event (requires auth).
+     * PUT/PATCH /api/v1/events/{id}  [faculty/admin only]
+     * Partially or fully update an event.
      */
     public function update(Request $request, string $id): JsonResponse
     {
         $event = Event::find($id);
-        if (!$event) return $this->notFoundResponse("Event");
+        if (!$event) return $this->notFoundResponse('Event');
 
         $validated = $request->validate([
-            "title"                 => "sometimes|string|max:255",
-            "description"           => "sometimes|string",
-            "location"              => "sometimes|string|max:255",
-            "date"                  => "sometimes|date",
-            "time_start"            => "sometimes|date_format:H:i:s",
-            "time_end"              => "sometimes|date_format:H:i:s",
-            "category"              => "sometimes|string|max:100",
-            "status"                => "sometimes|in:upcoming,ongoing,past,cancelled",
-            "capacity"              => "sometimes|integer|min:1",
-            "is_free"               => "sometimes|boolean",
-            "contact_email"         => "sometimes|nullable|email",
-            "registration_deadline" => "sometimes|nullable|date",
+            'title'                 => 'sometimes|string|max:255',
+            'description'           => 'sometimes|string',
+            'location'              => 'sometimes|string|max:255',
+            'date'                  => 'sometimes|date',
+            'time_start'            => 'sometimes|date_format:H:i:s',
+            'time_end'              => 'sometimes|date_format:H:i:s',
+            'category'              => 'sometimes|string|max:100',
+            'capacity'              => 'sometimes|integer|min:1',
+            'status'                => 'sometimes|in:upcoming,ongoing,past,cancelled',
+            'is_free'               => 'sometimes|boolean',
+            'contact_email'         => 'sometimes|nullable|email',
+            'registration_deadline' => 'sometimes|nullable|date',
         ]);
 
         $event->update($validated);
-        $event->load("organizer:id,name,role");
+        $event->load('organizer:id,name,role');
+        $event->append(['rsvp_count', 'seats_available', 'is_full']);
 
-        return $this->successResponse($event, "Event updated.");
+        return $this->successResponse($event, 'Event updated.');
     }
 
     /**
-     * DELETE /api/v1/events/{id}
-     * Delete an event (requires auth).
+     * DELETE /api/v1/events/{id}  [faculty/admin only]
+     * Delete an event.
      */
     public function destroy(string $id): JsonResponse
     {
         $event = Event::find($id);
-        if (!$event) return $this->notFoundResponse("Event");
+        if (!$event) return $this->notFoundResponse('Event');
 
         $title = $event->title;
         $event->delete();
@@ -123,41 +133,50 @@ class EventController extends Controller
 
     /**
      * POST /api/v1/events/{id}/rsvp
-     * RSVP the authenticated user to an event (requires auth).
+     * Three-layer validation: duplicate → capacity → deadline.
      */
     public function rsvp(Request $request, string $id): JsonResponse
     {
         $event = Event::find($id);
-        if (!$event) return $this->notFoundResponse("Event");
+        if (!$event) return $this->notFoundResponse('Event');
 
         $user = $request->user();
 
-        // Prevent duplicate RSVPs
-        $existing = EventRsvp::where("user_id", $user->id)
-                              ->where("event_id", $event->id)
+        // CHECK 1 — Duplicate RSVP (409 Conflict)
+        $existing = EventRsvp::where('user_id', $user->id)
+                              ->where('event_id', $event->id)
                               ->first();
         if ($existing) {
-            return $this->errorResponse("Already RSVPed to this event.", 409);
+            return $this->errorResponse('You have already RSVPed to this event.', 409);
         }
 
-        // Check capacity
+        // CHECK 2 — Capacity (409 Conflict)
         if ($event->is_full) {
-            return $this->errorResponse("Event is fully booked.", 409);
+            return $this->errorResponse('This event is fully booked.', 409);
         }
 
+        // CHECK 3 — Registration deadline (422 Unprocessable)
+        if ($event->registration_deadline && now()->gt($event->registration_deadline->endOfDay())) {
+            return $this->errorResponse('Registration deadline has passed.', 422);
+        }
+
+        // All checks passed — create the RSVP
         $rsvp = EventRsvp::create([
-            "user_id"  => $user->id,
-            "event_id" => $event->id,
-            "status"   => "confirmed",
-            "rsvp_at"  => now(),
+            'user_id'  => $user->id,
+            'event_id' => $event->id,
+            'status'   => 'confirmed',
+            'rsvp_at'  => now(),
         ]);
 
-        return $this->successResponse([
-            "rsvp_id"     => $rsvp->id,
-            "event_title" => $event->title,
-            "event_date"  => $event->date->toDateString(),
-            "user_name"   => $user->name,
-            "status"      => "confirmed",
-        ], "RSVP confirmed for \"{$event->title}\".", 201);
+        return $this->createdResponse([
+            'rsvp_id'        => $rsvp->id,
+            'event_id'       => $event->id,
+            'event_title'    => $event->title,
+            'event_date'     => $event->date->toDateString(),
+            'event_location' => $event->location,
+            'user_name'      => $user->name,
+            'status'         => 'confirmed',
+            'rsvp_at'        => $rsvp->rsvp_at->toDateTimeString(),
+        ], "RSVP confirmed for \"{$event->title}\".");
     }
 }

@@ -44,17 +44,18 @@ Route::prefix('v1/auth')->middleware('auth:sanctum')->group(function () {
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // ── READ-ONLY — all authenticated users ───────────────────────
-    Route::get('announcements',          [AnnouncementController::class, 'index']);
-    Route::get('announcements/{id}',     [AnnouncementController::class, 'show']);
-    Route::get('events',                 [EventController::class, 'index']);
-    Route::get('events/{id}',            [EventController::class, 'show']);
-    Route::post('events/{id}/rsvp',      [EventController::class, 'rsvp']);
-    Route::get('schedules',              [ScheduleController::class, 'index']);
-    Route::get('notifications',          [NotificationController::class, 'index']);
-    Route::get('notifications/{id}',     [NotificationController::class, 'show']);
+    Route::get('announcements',             [AnnouncementController::class, 'index']);
+    Route::get('announcements/{id}',        [AnnouncementController::class, 'show']);
+    Route::get('events',                    [EventController::class, 'index']);
+    Route::get('events/{id}',               [EventController::class, 'show']);
+    Route::post('events/{id}/rsvp',         [EventController::class, 'rsvp']);
+    Route::get('schedules',                 [ScheduleController::class, 'index']);
+    Route::get('notifications',             [NotificationController::class, 'index']);
+    Route::get('notifications/{id}',        [NotificationController::class, 'show']);
     Route::patch('notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::delete('notifications/{id}',  [NotificationController::class, 'destroy']);
-    Route::post('chatbot',               [ChatbotController::class, 'chat']);
+    Route::delete('notifications/{id}',     [NotificationController::class, 'destroy']);
+    Route::post('chatbot',                  [ChatbotController::class, 'chat']);
+    Route::get('chatbot/history',           [ChatbotController::class, 'history']);
 
     // ── ADMIN ONLY — announcement write operations ─────────────────
     Route::middleware(EnsureIsAdmin::class)->group(function () {
