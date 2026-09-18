@@ -27,6 +27,16 @@ trait ApiResponseTrait
     }
 
     /**
+     * Return a 201 Created JSON response.
+     */
+    protected function createdResponse(
+        mixed $data = null,
+        string $message = 'Created successfully.'
+    ): JsonResponse {
+        return $this->successResponse($data, $message, 201);
+    }
+
+    /**
      * Return an error JSON response.
      */
     protected function errorResponse(
@@ -44,6 +54,15 @@ trait ApiResponseTrait
         }
 
         return response()->json($response, $statusCode);
+    }
+
+    /**
+     * Return a 403 Forbidden JSON response.
+     */
+    protected function forbiddenResponse(
+        string $message = 'You do not have permission to perform this action.'
+    ): JsonResponse {
+        return $this->errorResponse($message, 403);
     }
 
     /**

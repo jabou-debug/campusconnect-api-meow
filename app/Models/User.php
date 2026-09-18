@@ -30,29 +30,61 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-    public function announcements() { 
-    return $this->hasMany(Announcement::class); 
-    } 
-    
-    public function organizedEvents() { 
-        return $this->hasMany(Event::class); 
-    } 
-    
-    public function rsvpedEvents() { 
-        return $this->belongsToMany(Event::class, "event_rsvps") 
-                    ->withPivot("status","rsvp_at") 
-                    ->withTimestamps(); 
-    } 
-    
-    public function schedules() { 
-        return $this->hasMany(Schedule::class); 
-    } 
-    
-    public function notifications() { 
-        return $this->hasMany(Notification::class); 
-    } 
-    
-    public function chatbotMessages() { 
-        return $this->hasMany(ChatbotMessage::class); 
+
+    // ── Relationships ──────────────────────────────────────────────
+
+    public function announcements()
+    {
+        return $this->hasMany(Announcement::class);
+    }
+
+    public function organizedEvents()
+    {
+        return $this->hasMany(Event::class);
+    }
+
+    public function rsvpedEvents()
+    {
+        return $this->belongsToMany(Event::class, 'event_rsvps')
+                    ->withPivot('status', 'rsvp_at')
+                    ->withTimestamps();
+    }
+
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function chatbotMessages()
+    {
+        return $this->hasMany(ChatbotMessage::class);
+    }
+
+    // ── Role Helpers ───────────────────────────────────────────────
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isFaculty(): bool
+    {
+        return $this->role === 'faculty';
+    }
+
+    public function isStudent(): bool
+    {
+        return $this->role === 'student';
+    }
+
+    /** Admin OR faculty */
+    public function isStaff(): bool
+    {
+        return in_array($this->role, ['admin', 'faculty']);
     }
 }

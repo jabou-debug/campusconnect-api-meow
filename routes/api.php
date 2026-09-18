@@ -1,6 +1,13 @@
 <?php
 
-use Illuminate\Http\Request;
+use App\Http\Middleware\EnsureIsAdmin;
+use App\Http\Middleware\EnsureIsFaculty;
+use App\Http\Controllers\Api\V1\AnnouncementController;
+use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ChatbotController;
+use App\Http\Controllers\Api\V1\EventController;
+use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\ScheduleController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -10,58 +17,59 @@ use Illuminate\Support\Facades\Route;
 */
 
 // ── Health Check (public) ────────────────────────────────────────────────
-Route::get("/v1/health", function () {
+Route::get('/v1/health', function () {
     return response()->json([
-        "success"   => true,
-        "message"   => "CampusConnect API is running.",
-        "version"   => "1.0.0",
-        "timestamp" => now()->toDateTimeString(),
+        'success'   => true,
+        'message'   => 'CampusConnect API is running.',
+        'version'   => '1.0.0',
+        'timestamp' => now()->toDateTimeString(),
     ]);
 });
 
-// ── Authentication (public) ──────────────────────────────────────────────
-Route::prefix("v1/auth")->group(function () {
-    Route::post("/register", [\App\Http\Controllers\Api\V1\AuthController::class, "register"]);
-    Route::post("/login",    [\App\Http\Controllers\Api\V1\AuthController::class, "login"]);
+// ── Authentication — Public (no token needed) ────────────────────────────
+Route::prefix('v1/auth')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login',    [AuthController::class, 'login']);
 });
 
-// ── Public Read Routes ───────────────────────────────────────────────────
-Route::prefix("v1")->group(function () {
-    Route::get("announcements",           [\App\Http\Controllers\Api\V1\AnnouncementController::class, "index"]);
-    Route::get("announcements/{id}",      [\App\Http\Controllers\Api\V1\AnnouncementController::class, "show"]);
-    Route::get("events",                  [\App\Http\Controllers\Api\V1\EventController::class, "index"]);
-    Route::get("events/{id}",             [\App\Http\Controllers\Api\V1\EventController::class, "show"]);
+// ── Authentication — Protected (token required) ──────────────────────────
+Route::prefix('v1/auth')->middleware('auth:sanctum')->group(function () {
+    Route::post('/logout',     [AuthController::class, 'logout']);
+    Route::post('/logout-all', [AuthController::class, 'logoutAll']);
+    Route::get('/me',          [AuthController::class, 'me']);
+    Route::put('/profile',     [AuthController::class, 'updateProfile']);
 });
 
-// ── Protected Routes (auth:sanctum required) ─────────────────────────────
-Route::prefix("v1")->middleware("auth:sanctum")->group(function () {
+// ── All other protected routes ───────────────────────────────────────────
+Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
-    // Auth
-    Route::post("/auth/logout", [\App\Http\Controllers\Api\V1\AuthController::class, "logout"]);
-    Route::get("/auth/me",      [\App\Http\Controllers\Api\V1\AuthController::class, "me"]);
+    // ── READ-ONLY — all authenticated users ───────────────────────
+    Route::get('announcements',          [AnnouncementController::class, 'index']);
+    Route::get('announcements/{id}',     [AnnouncementController::class, 'show']);
+    Route::get('events',                 [EventController::class, 'index']);
+    Route::get('events/{id}',            [EventController::class, 'show']);
+    Route::post('events/{id}/rsvp',      [EventController::class, 'rsvp']);
+    Route::get('schedules',              [ScheduleController::class, 'index']);
+    Route::get('notifications',          [NotificationController::class, 'index']);
+    Route::get('notifications/{id}',     [NotificationController::class, 'show']);
+    Route::patch('notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::delete('notifications/{id}',  [NotificationController::class, 'destroy']);
+    Route::post('chatbot',               [ChatbotController::class, 'chat']);
 
-    // Announcements — write operations
-    Route::post("announcements",        [\App\Http\Controllers\Api\V1\AnnouncementController::class, "store"]);
-    Route::put("announcements/{id}",    [\App\Http\Controllers\Api\V1\AnnouncementController::class, "update"]);
-    Route::patch("announcements/{id}",  [\App\Http\Controllers\Api\V1\AnnouncementController::class, "update"]);
-    Route::delete("announcements/{id}", [\App\Http\Controllers\Api\V1\AnnouncementController::class, "destroy"]);
+    // ── ADMIN ONLY — announcement write operations ─────────────────
+    Route::middleware(EnsureIsAdmin::class)->group(function () {
+        Route::post('announcements',          [AnnouncementController::class, 'store']);
+        Route::put('announcements/{id}',      [AnnouncementController::class, 'update']);
+        Route::patch('announcements/{id}',    [AnnouncementController::class, 'update']);
+        Route::delete('announcements/{id}',   [AnnouncementController::class, 'destroy']);
+    });
 
-    // Events — write operations + RSVP
-    Route::post("events",                  [\App\Http\Controllers\Api\V1\EventController::class, "store"]);
-    Route::put("events/{id}",              [\App\Http\Controllers\Api\V1\EventController::class, "update"]);
-    Route::patch("events/{id}",            [\App\Http\Controllers\Api\V1\EventController::class, "update"]);
-    Route::delete("events/{id}",           [\App\Http\Controllers\Api\V1\EventController::class, "destroy"]);
-    Route::post("events/{id}/rsvp",        [\App\Http\Controllers\Api\V1\EventController::class, "rsvp"]);
+    // ── FACULTY OR ADMIN — event write operations ──────────────────
+    Route::middleware(EnsureIsFaculty::class)->group(function () {
+        Route::post('events',          [EventController::class, 'store']);
+        Route::put('events/{id}',      [EventController::class, 'update']);
+        Route::patch('events/{id}',    [EventController::class, 'update']);
+        Route::delete('events/{id}',   [EventController::class, 'destroy']);
+    });
 
-    // Schedules
-    Route::get("schedules", [\App\Http\Controllers\Api\V1\ScheduleController::class, "index"]);
-
-    // Chatbot
-    Route::post("chatbot", [\App\Http\Controllers\Api\V1\ChatbotController::class, "chat"]);
-
-    // Notifications
-    Route::get("notifications",              [\App\Http\Controllers\Api\V1\NotificationController::class, "index"]);
-    Route::get("notifications/{id}",         [\App\Http\Controllers\Api\V1\NotificationController::class, "show"]);
-    Route::patch("notifications/{id}/read",  [\App\Http\Controllers\Api\V1\NotificationController::class, "markAsRead"]);
-    Route::delete("notifications/{id}",      [\App\Http\Controllers\Api\V1\NotificationController::class, "destroy"]);
 });
